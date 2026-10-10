@@ -37,3 +37,41 @@ func TestPlainSchemaKeepsOnlyWhatAntigravityTakes(t *testing.T) {
 		t.Errorf("got %s", b)
 	}
 }
+
+// A string enum can carry an empty value: an MCP tool's Python
+// Literal["", "1080p", "720p"] comes out of FastMCP as
+// {"default": "", "enum": ["", "1080p", "720p"], "title": "Output Size",
+// "type": "string"}, the "" meaning "use the default". Antigravity refuses
+// the declaration over it ("parameters.properties[output_size].enum[0]:
+// cannot be empty"), and the whole turn fails though no tool was called
+// (dsh, DeepSeek Harness). The keyword keeps the real values only, and goes
+// away when none is left.
+func TestPlainSchemaDropsEmptyEnumValues(t *testing.T) {
+	in := `{"type":"object","properties":{
+	"output_size":{"default":"","enum":["","1080p","720p"],"title":"Output Size","type":"string"},
+	"caption_font":{"default":"","enum":["","黑体","快乐体","黄油体","毛笔","手写","宋体"],"title":"Caption Font","type":"string"},
+	"background":{"default":"","enum":["","transparent","opaque"],"title":"Background","type":"string"},
+	"use_case":{"default":"","enum":["","ad_people","talking_head","scenery","draft","series"],"title":"Use Case","type":"string"},
+	"only_default":{"type":"string","enum":[""]},
+	"mixed":{"type":"string","enum":["",1]},
+	"blank_const":{"type":"string","const":""},
+	"real_const":{"type":"string","const":"pop"}}}`
+	want := `{"type":"object","properties":{
+	"output_size":{"type":"string","enum":["1080p","720p"]},
+	"caption_font":{"type":"string","enum":["黑体","快乐体","黄油体","毛笔","手写","宋体"]},
+	"background":{"type":"string","enum":["transparent","opaque"]},
+	"use_case":{"type":"string","enum":["ad_people","talking_head","scenery","draft","series"]},
+	"only_default":{"type":"string"},
+	"mixed":{"type":"string"},
+	"blank_const":{"type":"string"},
+	"real_const":{"type":"string","enum":["pop"]}}}`
+	var got, exp any
+	if err := json.Unmarshal(plainSchema(json.RawMessage(in)), &got); err != nil {
+		t.Fatal(err)
+	}
+	json.Unmarshal([]byte(want), &exp)
+	if !reflect.DeepEqual(got, exp) {
+		b, _ := json.Marshal(got)
+		t.Errorf("got %s", b)
+	}
+}

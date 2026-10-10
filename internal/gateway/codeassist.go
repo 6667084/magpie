@@ -565,7 +565,20 @@ func plainSchema(raw json.RawMessage) json.RawMessage {
 							}
 						}
 						if len(strs) == len(es) {
-							out[k] = strs
+							// "" is the "use the default" placeholder some clients
+							// put in a string enum (a Python Literal["", …] behind
+							// dsh's MCP tools): a declaration carrying an empty
+							// value is refused outright, so keep the real values
+							// only and drop the keyword when none is left.
+							kept := make([]any, 0, len(strs))
+							for _, s := range strs {
+								if s != "" {
+									kept = append(kept, s)
+								}
+							}
+							if len(kept) > 0 {
+								out[k] = kept
+							}
 						}
 					}
 				default:
@@ -575,7 +588,8 @@ func plainSchema(raw json.RawMessage) json.RawMessage {
 				}
 			}
 			if c, ok := x["const"]; ok {
-				if s, ok := c.(string); ok {
+				// an empty const turns into an empty enum value, which is refused
+				if s, ok := c.(string); ok && s != "" {
 					out["enum"] = []any{s}
 				}
 			}
